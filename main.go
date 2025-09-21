@@ -15,6 +15,15 @@ func main() {
 	mux := http.NewServeMux()
 	// When mux hasn't been assigned any handlers it simply returns 404
 
+	// 1. Create a file server handler.
+	// `http.Dir(".")` creates a file system rooted at the "." path.
+	fileServer := http.FileServer(http.Dir("."))
+
+	// 2. Register the file server to handle requests for the root path.
+	// http.Handle("/", ...) tells the multiplexer to use the fileServer
+	// for any path that starts with `/`.
+	mux.Handle("/", fileServer)
+
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: mux,
