@@ -6,6 +6,7 @@ import (
 )
 
 func main() {
+	const filepathRoot = "."
 	const port = "8080"
 
 	// An HTTP request multiplexer
@@ -17,7 +18,7 @@ func main() {
 
 	// 1. Create a file server handler.
 	// `http.Dir(".")` creates a file system rooted at the "." path.
-	fileServer := http.FileServer(http.Dir("."))
+	fileServer := http.FileServer(http.Dir(filepathRoot))
 
 	// 2. Register the file server to handle requests for the root path.
 	// http.Handle("/", ...) tells the multiplexer to use the fileServer
