@@ -41,9 +41,9 @@ func main() {
 	// if our server is ready to receive traffic.
 	// The endpoint should be accessible at the /healthz path
 	// using any HTTP method.
-	mux.HandleFunc("/healthz", handlerReadiness)
-	mux.HandleFunc("/metrics", apiCfg.handlerMetrics)
-	mux.HandleFunc("/reset", apiCfg.handlerResetNumReq)
+	mux.HandleFunc("GET /healthz", handlerReadiness)
+	mux.HandleFunc("GET /metrics", apiCfg.handlerMetrics)
+	mux.HandleFunc("POST /reset", apiCfg.handlerResetNumReq)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -64,12 +64,12 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, req *http.Request) {
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	// Wrap the given handler `next` in another nameless handler so that once
+	// Wrap the given handler `next` in a nameless handler so that once
 	// middlewareMetricsInc() is called and registers this namesless handler,
-	// the count will increase and the `next` handle will execute evrytime the
+	// the count will increase and the `next` handle will execute everytime the
 	// corresponding endpoint is reached because it is this nameless handler
-	// what will actually run on each request, or more specifically, its
-	// ServeHTTP method, which is the nameless function below
+	// what will actually run on each request, executing its ServeHTTP method
+	// (the part inside {} below), which is  what gets registered to the mux
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileserverHits.Add(1)
 		next.ServeHTTP(w, r)
