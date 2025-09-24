@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"sync/atomic"
@@ -41,9 +40,9 @@ func main() {
 	// if our server is ready to receive traffic.
 	// The endpoint should be accessible at the /healthz path
 	// using any HTTP method.
-	mux.HandleFunc("GET /healthz", handlerReadiness)
-	mux.HandleFunc("GET /metrics", apiCfg.handlerMetrics)
-	mux.HandleFunc("POST /reset", apiCfg.handlerResetNumReq)
+	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
+	mux.HandleFunc("POST /admin/reset", apiCfg.handlerResetNumReq)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -52,28 +51,6 @@ func main() {
 
 	log.Printf("Serving on port: %s\n", port)
 	log.Fatal(srv.ListenAndServe())
-}
-
-func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, req *http.Request) {
-	// Set the Content-Type header to indicate the response body format.
-	w.Header().Set("Content-Type", "text/plain")
-	// Set the HTTP status code.
-	w.WriteHeader(http.StatusOK) // Or other status codes like http.StatusNotFound, http.StatusInternalServerError
-	// Write the response body.
-	w.Write([]byte(fmt.Sprintf("Hits: %d", cfg.fileserverHits.Load())))
-}
-
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	// Wrap the given handler `next` in a nameless handler so that once
-	// middlewareMetricsInc() is called and registers this namesless handler,
-	// the count will increase and the `next` handle will execute everytime the
-	// corresponding endpoint is reached because it is this nameless handler
-	// what will actually run on each request, executing its ServeHTTP method
-	// (the part inside {} below), which is  what gets registered to the mux
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits.Add(1)
-		next.ServeHTTP(w, r)
-	})
 }
 
 // Command to build and run the server:
