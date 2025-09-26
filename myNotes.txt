@@ -1,0 +1,24 @@
+This command contains the connection string for the database:
+psql "postgres://tavo:@localhost:5432/chirpy"
+
+To migrate the database up/down using goose, navigate to sql/schema folder and use command:
+goose postgres "postgres://tavo:@localhost:5432/chirpy" up
+
+
+Remember you need to add Google's uuid package manually by running:
+go get github.com/google/uuid
+As well as a Postgres driver! So program knows how to talk to the database:
+go get github.com/lib/pq
+Used by adding this to the top of main.go :
+import _ "github.com/lib/pq"
+Not used directly in the code. Underscore tells Go that it's importing it for
+its side effects, not because you need to use it.
+
+Remember to add a .env file at the root with contents below. Ther reason
+being that this is a local database and as such there's no SSL certificates:
+DB_URL="postgres://tavo:@localhost:5432/chirpy?sslmode=disable"
+Then run:
+go get github.com/joho/godotenv
+Then call godotenv.Load() at the beginning of main() to load the .env file
+into the environment variables.
+Then you can use os.Getenv to get the DB_URL from the environment.

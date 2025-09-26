@@ -1,20 +1,44 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
+
+	"github.com/Taviquenson/chirpy/internal/database"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32 // allows us to safely increment and
 	// read an integer value across multiple
 	// goroutines (HTTP requests)
+	db *database.Queries
 }
 
 func main() {
 	const filepathRoot = "."
 	const port = "8080"
+
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL must be set")
+	}
+
+	dbConn, err := sql.Open("postgres", dbURL) // connect to db
+	if err != nil {
+		log.Fatalf("Error opening databse: %s", err)
+	}
+	dbQueries := database.New(dbConn) // type *database.Queries
+
+	apiCfg := apiConfig{
+		fileserverHits: atomic.Int32{},
+		db:             dbQueries,
+	}
 
 	// An HTTP request multiplexer
 	// It matches the URL of each incoming request against a
@@ -25,8 +49,6 @@ func main() {
 
 	// Create a file server handler.
 	fileServerHandler := http.FileServer(http.Dir(filepathRoot))
-
-	apiCfg := apiConfig{} // fileserverHits is initialized to default value of 0
 
 	// Register the file server to handle requests at /app/
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", fileServerHandler)))
