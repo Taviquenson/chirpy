@@ -16,17 +16,27 @@ type apiConfig struct {
 	fileserverHits atomic.Int32 // allows us to safely increment and
 	// read an integer value across multiple
 	// goroutines (HTTP requests)
-	db *database.Queries
+	db       *database.Queries
+	platform string
 }
 
 func main() {
 	const filepathRoot = "."
 	const port = "8080"
 
+	// Using a connection URL because it can point to a local or remote database
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
 		log.Fatal("DB_URL must be set")
+	}
+	// os.Getenv returns "" if the variable isn’t set.
+	// If you build apiCfg before loading env (or the var doesn’t exist),
+	// cfg.platform will be "" and your check will treat it as non-dev,
+	// blocking the reset.
+	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		log.Fatal("PLATFORM must be set")
 	}
 
 	dbConn, err := sql.Open("postgres", dbURL) // connect to db
@@ -38,6 +48,7 @@ func main() {
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
+		platform:       platform,
 	}
 
 	// An HTTP request multiplexer
@@ -63,9 +74,12 @@ func main() {
 	// The endpoint should be accessible at the /healthz path
 	// using any HTTP method.
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
-	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
-	mux.HandleFunc("POST /admin/reset", apiCfg.handlerResetNumReq)
 	mux.HandleFunc("POST /api/validate_chirp", handlerChirpsValidate)
+
+	mux.HandleFunc("POST /api/users", apiCfg.handlerCreateUser)
+
+	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
+	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
 
 	srv := &http.Server{
 		Addr:    ":" + port,

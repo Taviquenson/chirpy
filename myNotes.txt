@@ -1,5 +1,7 @@
-This command contains the connection string for the database:
+This command connects to the database:
 psql "postgres://tavo:@localhost:5432/chirpy"
+The string is the connection string for the database.
+
 
 To migrate the database up/down using goose, navigate to sql/schema folder and use command:
 goose postgres "postgres://tavo:@localhost:5432/chirpy" up
