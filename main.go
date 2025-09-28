@@ -62,7 +62,8 @@ func main() {
 	fileServerHandler := http.FileServer(http.Dir(filepathRoot))
 
 	// Register the file server to handle requests at /app/
-	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", fileServerHandler)))
+	fsHandler := apiCfg.middlewareMetricsInc(http.StripPrefix("/app", fileServerHandler))
+	mux.Handle("/app/", fsHandler)
 	// http.FileServer serves files relative to the directory
 	// you give it (http.Dir(filepathRoot)) and uses the full
 	// URL path to find files. Without stripping the "/app"
@@ -74,9 +75,9 @@ func main() {
 	// The endpoint should be accessible at the /healthz path
 	// using any HTTP method.
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
-	mux.HandleFunc("POST /api/validate_chirp", handlerChirpsValidate)
 
-	mux.HandleFunc("POST /api/users", apiCfg.handlerCreateUser)
+	mux.HandleFunc("POST /api/users", apiCfg.handlerUsersCreate)
+	mux.HandleFunc("POST /api/chirps", apiCfg.handlerChirpsCreate)
 
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
