@@ -24,9 +24,6 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, req *http.Reque
 		Body   string    `json:"body"`
 		UserID uuid.UUID `json:"user_id"`
 	}
-	type response struct {
-		Chirp
-	}
 
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
