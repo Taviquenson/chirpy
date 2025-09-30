@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Taviquenson/chirpy/internal/auth"
+	"github.com/Taviquenson/chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -13,11 +15,13 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+	Password  string    `json:"-"`
 }
 
 func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Email string `json:"email"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 	type response struct {
 		User
@@ -31,10 +35,20 @@ func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't hash password", err)
+		return
+	}
+	userParams := database.CreateUserParams{
+		Email:          params.Email,
+		HashedPassword: hashedPassword,
+	}
+
 	// By passing the handler's http.Request.Context() to the query,
 	// the library will automatically cancel the database query if the
 	// HTTP request is canceled or times out.
-	user, err := cfg.db.CreateUser(req.Context(), params.Email)
+	user, err := cfg.db.CreateUser(req.Context(), userParams)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create user", err)
 		return
