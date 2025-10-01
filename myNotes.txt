@@ -24,3 +24,337 @@ go get github.com/joho/godotenv
 Then call godotenv.Load() at the beginning of main() to load the .env file
 into the environment variables.
 Then you can use os.Getenv to get the DB_URL from the environment.
+
+
+
+---- Notes on tokens ----
+What's a token?
+- A token is a small signed string the server gives a client after login.
+- It proves “who you are” without sending your password each time.
+- The server signs it (e.g., with HMAC) so clients can’t tamper with its contents.
+- Clients send it on each request (usually in the Authorization header) so the server can authorize actions.
+
+JWTs (JSON Web Tokens)
+- A common token format: three base64url parts (header, payload, signature).
+- Payload holds claims like subject (user ID), issuer, issued-at, expiry.
+- Signature proves the payload hasn’t been changed.
+
+Access tokens vs. refresh tokens
+
+Access token:
+- Short-lived (minutes).
+- Used on every API request.
+- If stolen, damage is limited by short expiry.
+
+Refresh token:
+- Longer-lived (days/weeks).
+- Used only to get a new access token when the old one expires.
+- Never sent on normal API calls (only to the token-refresh endpoint).
+- Often stored more securely (e.g., HTTP-only cookie) and guarded tightly.
+
+Why both?
+Security + usability. Short-lived access tokens reduce risk;
+refresh tokens let users stay logged in without re-entering
+credentials constantly.
+
+Typical flow
+1. User logs in with password.
+2. Server issues:
+   - Access token (e.g., issuer=chirpy-access, exp=15m)
+   - Refresh token (e.g., issuer=chirpy-refresh, exp=7d)
+3. Client calls APIs with the access token.
+4. When it expires, client sends the refresh token to get a new access token.
+5. Server can revoke refresh tokens server-side
+   (e.g., store IDs, rotate, or blacklist).
+
+Best practices (starter set)
+- Keep access tokens short-lived.
+- Don’t use refresh tokens on every request; only at refresh endpoints.
+- Validate issuer, expiry, and audience.
+- Consider rotation: issue a new refresh token on each refresh and invalidate the old one.
+- Store secrets safely; use HTTPS.
+
+---- Minimal, Tokens self-contained example ----
+// Issues both an access token and a refresh token using
+// github.com/golang-jwt/jwt/v5.
+// Shows different issuers, expirations, and how you might validate them.
+package main
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+)
+
+type TokenType string
+
+const (
+	TokenTypeAccess  TokenType = "chirpy-access"
+	TokenTypeRefresh TokenType = "chirpy-refresh"
+)
+
+func makeJWT(userID uuid.UUID, issuer TokenType, secret string, ttl time.Duration) (string, error) {
+	claims := jwt.RegisteredClaims{
+		Issuer:    string(issuer),                          // identify token "type"
+		Subject:   userID.String(),                         // the user ID
+		IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),    // when issued
+		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(ttl)), // when expires
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
+
+func validateJWT(tokenStr, expectedIssuer, secret string) (uuid.UUID, error) {
+	var claims jwt.RegisteredClaims
+	token, err := jwt.ParseWithClaims(tokenStr, &claims, func(t *jwt.Token) (interface{}, error) {
+		return []byte(secret), nil
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	// Signature and time-based claims (exp/nbf) are checked by ParseWithClaims
+	iss, err := token.Claims.GetIssuer()
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if iss != expectedIssuer {
+		return uuid.Nil, fmt.Errorf("invalid issuer: %s", iss)
+	}
+	sub, err := token.Claims.GetSubject()
+	if err != nil {
+		return uuid.Nil, err
+	}
+	id, err := uuid.Parse(sub)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid subject: %w", err)
+	}
+	return id, nil
+}
+
+func main() {
+	// Example usage: issue both tokens after login.
+	userID := uuid.New()
+	secret := "super-secret"
+
+	accessTTL := 15 * time.Minute
+	refreshTTL := 7 * 24 * time.Hour
+
+	accessToken, err := makeJWT(userID, TokenTypeAccess, secret, accessTTL)
+	if err != nil {
+		panic(err)
+	}
+	refreshToken, err := makeJWT(userID, TokenTypeRefresh, secret, refreshTTL)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Access:", accessToken)
+	fmt.Println("Refresh:", refreshToken)
+
+	// Validate access token where normal API requests come in.
+	if _, err := validateJWT(accessToken, string(TokenTypeAccess), secret); err != nil {
+		fmt.Println("Access token invalid:", err)
+	}
+
+	// Validate refresh token only at the refresh endpoint.
+	if _, err := validateJWT(refreshToken, string(TokenTypeRefresh), secret); err != nil {
+		fmt.Println("Refresh token invalid:", err)
+	}
+
+	// In a real app:
+	// - Store/rotate refresh tokens securely (e.g., DB with revocation/rotation).
+	// - Never send refresh tokens on normal API calls, only at refresh endpoint.
+	// - On refresh, issue a new access token (and often a new refresh token).
+}
+
+
+
+
+
+---- Another example ----
+// Accepts a refresh token (e.g., from an HTTP-only cookie)
+// Validates it as a refresh token
+// Issues a new short-lived access token (and rotates the refresh token, optional)
+// go
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+)
+
+type TokenType string
+
+const (
+	TokenTypeAccess  TokenType = "chirpy-access"
+	TokenTypeRefresh TokenType = "chirpy-refresh"
+)
+
+var jwtSecret = "super-secret"
+
+// Minimal helpers
+func makeJWT(userID uuid.UUID, issuer TokenType, secret string, ttl time.Duration) (string, error) {
+	claims := jwt.RegisteredClaims{
+		Issuer:    string(issuer),
+		Subject:   userID.String(),
+		IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(ttl)),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return tok.SignedString([]byte(secret))
+}
+
+func validateJWT(tokenStr, expectedIssuer, secret string) (uuid.UUID, error) {
+	var claims jwt.RegisteredClaims
+	tok, err := jwt.ParseWithClaims(tokenStr, &claims, func(t *jwt.Token) (interface{}, error) {
+		return []byte(secret), nil
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	iss, err := tok.Claims.GetIssuer()
+	if err != nil || iss != expectedIssuer {
+		return uuid.Nil, errors.New("invalid issuer")
+	}
+	sub, err := tok.Claims.GetSubject()
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return uuid.Parse(sub)
+}
+
+// Example in-memory refresh rotation store (stub)
+var validRefreshIDs = map[string]bool{} // store token IDs (jti) in real apps
+
+// Optional: include a JTI for rotation (shown here quickly)
+func makeRefreshJWT(userID uuid.UUID) (string, string, error) {
+	jti := uuid.New().String()
+	claims := jwt.RegisteredClaims{
+		Issuer:    string(TokenTypeRefresh),
+		Subject:   userID.String(),
+		ID:        jti,
+		IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(7 * 24 * time.Hour)),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString([]byte(jwtSecret))
+	if err != nil {
+		return "", "", err
+	}
+	validRefreshIDs[jti] = true
+	return signed, jti, nil
+}
+
+func checkAndInvalidateJTI(jti string) bool {
+	if !validRefreshIDs[jti] {
+		return false
+	}
+	delete(validRefreshIDs, jti) // rotate: invalidate old
+	return true
+}
+
+// Refresh endpoint
+func refreshHandler(w http.ResponseWriter, r *http.Request) {
+	// 1) Get refresh token (cookie or header). Cookie shown here.
+	c, err := r.Cookie("refresh_token")
+	if err != nil || c.Value == "" {
+		http.Error(w, "missing refresh token", http.StatusUnauthorized)
+		return
+	}
+
+	// 2) Validate refresh token
+	var claims jwt.RegisteredClaims
+	tok, err := jwt.ParseWithClaims(c.Value, &claims, func(t *jwt.Token) (interface{}, error) {
+		return []byte(jwtSecret), nil
+	})
+	if err != nil {
+		http.Error(w, "invalid refresh token", http.StatusUnauthorized)
+		return
+	}
+	iss, _ := tok.Claims.GetIssuer()
+	if iss != string(TokenTypeRefresh) {
+		http.Error(w, "wrong issuer", http.StatusUnauthorized)
+		return
+	}
+	jti, _ := tok.Claims.GetID()
+	if jti == "" || !checkAndInvalidateJTI(jti) {
+		http.Error(w, "refresh token revoked or unknown", http.StatusUnauthorized)
+		return
+	}
+	sub, err := tok.Claims.GetSubject()
+	if err != nil {
+		http.Error(w, "invalid subject", http.StatusUnauthorized)
+		return
+	}
+	userID, err := uuid.Parse(sub)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusUnauthorized)
+		return
+	}
+
+	// 3) Issue new access token
+	access, err := makeJWT(userID, TokenTypeAccess, jwtSecret, 15*time.Minute)
+	if err != nil {
+		http.Error(w, "failed to create access token", http.StatusInternalServerError)
+		return
+	}
+
+	// 4) (Optional) Rotate refresh token: issue a new one and set cookie
+	newRefresh, newJTI, err := makeRefreshJWT(userID)
+	if err != nil {
+		http.Error(w, "failed to create refresh token", http.StatusInternalServerError)
+		return
+	}
+	_ = newJTI // stored in validRefreshIDs map already
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    newRefresh,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   true, // set true in production
+	})
+
+	// 5) Return access token in response body (or header)
+	type resp struct {
+		AccessToken string `json:"access_token"`
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp{AccessToken: access})
+}
+
+func main() {
+	// Example: set initial refresh token for a user
+	userID := uuid.New()
+	refresh, _, _ := makeRefreshJWT(userID)
+	http.HandleFunc("/refresh", refreshHandler)
+
+	// Demo endpoint to set the cookie
+	http.HandleFunc("/login-demo", func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refresh_token",
+			Value:    refresh,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   true, // true in prod
+		})
+		w.Write([]byte("refresh cookie set"))
+	})
+
+	http.ListenAndServe(":8080", nil)
+}
+
+Notes:
+- In production, persist refresh tokens (or JTIs) in a database,
+  rotate them, and use HTTPS with Secure cookies.
+- Only accept refresh tokens at the refresh endpoint. Use the new
+  access token for normal API calls.
+
