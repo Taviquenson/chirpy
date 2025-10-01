@@ -2,6 +2,9 @@ package auth
 
 import (
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 // Boot.dev's example of how to properly test
@@ -89,5 +92,21 @@ func TestHashPasswordDefault(t *testing.T) {
 	match, err := CheckPasswordHash("unset", hash)
 	if !match || err != nil {
 		t.Errorf(`%v`, err)
+	}
+}
+
+func TestJWT(t *testing.T) {
+	id := uuid.New()
+	tokenString, err := MakeJWT(id, "AllYourBase", time.Second*5)
+	if err != nil {
+		t.Errorf(`%v`, err)
+	}
+
+	returnedID, err := ValidateJWT(tokenString, "AllYourBase")
+	if err != nil {
+		t.Errorf(`%v`, err)
+	}
+	if returnedID != id {
+		t.Errorf("The IDs don't match")
 	}
 }
