@@ -1,13 +1,14 @@
 package auth
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-// Boot.dev's tests
+// Boot.dev's example tests
 func TestCheckPasswordHash(t *testing.T) {
 	// First, we need to create some hashed passwords for testing
 	password1 := "correctPassword123!"
@@ -120,41 +121,91 @@ func TestValidateJWT(t *testing.T) {
 	}
 }
 
-// My own tests
-func TestHashPassword(t *testing.T) {
-	hash, err := HashPassword("techie$4Good")
-	if err != nil {
-		t.Errorf(`%v`, err)
+// My own tests after learning proper testing practice
+func TestGetBearerToken(t *testing.T) {
+	validHeaders := make(http.Header)
+	validHeaders.Set("Authorization", "Bearer VALID_TOKEN")
+	invalidHeaders := make(http.Header)
+	invalidHeaders.Set("Authorization", "BearerVALID_TOKEN")
+
+	tests := []struct {
+		name      string
+		header    http.Header
+		wantToken string
+		wantErr   bool
+	}{
+		{
+			name:      "Valid headers",
+			header:    validHeaders,
+			wantToken: "VALID_TOKEN",
+			wantErr:   false,
+		},
+		{
+			name:      "Invalid headers",
+			header:    invalidHeaders,
+			wantToken: "",
+			wantErr:   true,
+		},
+		{
+			name:      "Empty headers",
+			header:    make(http.Header),
+			wantToken: "",
+			wantErr:   true,
+		},
 	}
-	match, err := CheckPasswordHash("techie$4Good", hash)
-	if !match || err != nil {
-		t.Errorf(`%v`, err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotToken, err := GetBearerToken(tt.header)
+			// `if (err != nil) == wantError`: This isn't how you
+			// write it, with the `==`, because if you want the error
+			// then that's the expected behavior, nothing to report.
+			// You only report (enter the if) with something unexpected
+			if (err != nil) != tt.wantErr {
+				t.Errorf("tokenString() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if gotToken != tt.wantToken {
+				t.Errorf("tokenString() gotToken = %v, want %v", gotToken, tt.wantToken)
+			}
+		})
 	}
 }
 
-func TestHashPasswordDefault(t *testing.T) {
-	hash, err := HashPassword("unset")
-	if err != nil {
-		t.Errorf(`%v`, err)
-	}
-	match, err := CheckPasswordHash("unset", hash)
-	if !match || err != nil {
-		t.Errorf(`%v`, err)
-	}
-}
+// My own tests before learning proper testing practice
+// func TestHashPassword(t *testing.T) {
+// 	hash, err := HashPassword("techie$4Good")
+// 	if err != nil {
+// 		t.Errorf(`%v`, err)
+// 	}
+// 	match, err := CheckPasswordHash("techie$4Good", hash)
+// 	if !match || err != nil {
+// 		t.Errorf(`%v`, err)
+// 	}
+// }
 
-func TestJWT(t *testing.T) {
-	id := uuid.New()
-	tokenString, err := MakeJWT(id, "AllYourBase", time.Second*5)
-	if err != nil {
-		t.Errorf(`%v`, err)
-	}
+// func TestHashPasswordDefault(t *testing.T) {
+// 	hash, err := HashPassword("unset")
+// 	if err != nil {
+// 		t.Errorf(`%v`, err)
+// 	}
+// 	match, err := CheckPasswordHash("unset", hash)
+// 	if !match || err != nil {
+// 		t.Errorf(`%v`, err)
+// 	}
+// }
 
-	returnedID, err := ValidateJWT(tokenString, "AllYourBase")
-	if err != nil {
-		t.Errorf(`%v`, err)
-	}
-	if returnedID != id {
-		t.Errorf("The IDs don't match")
-	}
-}
+// func TestJWT(t *testing.T) {
+// 	id := uuid.New()
+// 	tokenString, err := MakeJWT(id, "AllYourBase", time.Second*5)
+// 	if err != nil {
+// 		t.Errorf(`%v`, err)
+// 	}
+
+// 	returnedID, err := ValidateJWT(tokenString, "AllYourBase")
+// 	if err != nil {
+// 		t.Errorf(`%v`, err)
+// 	}
+// 	if returnedID != id {
+// 		t.Errorf("The IDs don't match")
+// 	}
+// }
