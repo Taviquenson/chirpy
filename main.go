@@ -18,6 +18,7 @@ type apiConfig struct {
 	// goroutines (HTTP requests)
 	db       *database.Queries
 	platform string
+	secret   string
 }
 
 func main() {
@@ -39,6 +40,11 @@ func main() {
 		log.Fatal("PLATFORM must be set")
 	}
 
+	secret := os.Getenv("SECRET")
+	if secret == "" {
+		log.Fatal("SECRET must be set")
+	}
+
 	dbConn, err := sql.Open("postgres", dbURL) // connect to db
 	if err != nil {
 		log.Fatalf("Error opening databse: %s", err)
@@ -49,6 +55,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
 		platform:       platform,
+		secret:         secret,
 	}
 
 	// An HTTP request multiplexer

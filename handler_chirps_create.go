@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	// "fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/Taviquenson/chirpy/internal/auth"
 	"github.com/Taviquenson/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -30,6 +32,25 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, req *http.Reque
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
+		return
+	}
+
+	// Authenticate user
+	tokenString, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get bearer token", err)
+		return
+	}
+	userIDFromToken, err := auth.ValidateJWT(tokenString, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't validate JSON Web Token", err)
+		return
+	}
+	// fmt.Println(userIDFromToken)
+	// fmt.Println(params)
+	// fmt.Println(params.UserID)
+	if userIDFromToken != params.UserID {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized to post Chirp", err)
 		return
 	}
 

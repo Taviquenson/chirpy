@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/Taviquenson/chirpy/internal/auth"
 )
@@ -10,11 +11,13 @@ import (
 // Placeholder function signature (probably to be relocated)
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Password string `json:"password"`
-		Email    string `json:"email"`
+		Password   string `json:"password"`
+		Email      string `json:"email"`
+		Expiration int    `json:"expires_in_seconds"`
 	}
 	type response struct {
 		User
+		Token string `json:"token"`
 	}
 
 	// Decode request parameters
@@ -39,6 +42,20 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Produce JSON Web Token
+	expirationTime := time.Hour
+	if params.Expiration > 3600 || params.Expiration == 0 { // params.Expiration will be 0 if unspecified
+		expirationTime = time.Hour
+	} else {
+		expirationTime = time.Duration(params.Expiration) * time.Second
+	}
+
+	token, err := auth.MakeJWT(user.ID, cfg.secret, expirationTime)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't produce JSON Web Token", err)
+		return
+	}
+
 	respondWithJSON(w, http.StatusOK, response{
 		User: User{
 			ID:        user.ID,
@@ -46,5 +63,6 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 			UpdatedAt: user.UpdatedAt,
 			Email:     user.Email,
 		},
+		Token: token,
 	})
 }
