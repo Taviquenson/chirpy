@@ -11,13 +11,14 @@ import (
 // Placeholder function signature (probably to be relocated)
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Password   string `json:"password"`
-		Email      string `json:"email"`
-		Expiration int    `json:"expires_in_seconds"`
+		Password         string `json:"password"`
+		Email            string `json:"email"`
+		ExpiresInSeconds int    `json:"expires_in_seconds"`
 	}
 	type response struct {
 		User
-		Token string `json:"token"`
+		Token        string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
 
 	// Decode request parameters
@@ -44,15 +45,13 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 
 	// Produce JSON Web Token
 	expirationTime := time.Hour
-	if params.Expiration > 3600 || params.Expiration == 0 { // params.Expiration will be 0 if unspecified
-		expirationTime = time.Hour
-	} else {
-		expirationTime = time.Duration(params.Expiration) * time.Second
+	if params.ExpiresInSeconds > 0 && params.ExpiresInSeconds < 3600 { // params.ExpiresInSeconds will be 0 if unspecified
+		expirationTime = time.Duration(params.ExpiresInSeconds) * time.Second
 	}
 
-	token, err := auth.MakeJWT(user.ID, cfg.secret, expirationTime)
+	accessToken, err := auth.MakeJWT(user.ID, cfg.jwtSecret, expirationTime)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't produce JSON Web Token", err)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create JSON Web Token", err)
 		return
 	}
 
@@ -63,6 +62,6 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 			UpdatedAt: user.UpdatedAt,
 			Email:     user.Email,
 		},
-		Token: token,
+		Token: accessToken,
 	})
 }

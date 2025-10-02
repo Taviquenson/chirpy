@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	// "fmt"
+
 	"net/http"
 	"strings"
 	"time"
@@ -23,34 +23,26 @@ type Chirp struct {
 
 func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
-	}
-
-	decoder := json.NewDecoder(req.Body)
-	params := parameters{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
-		return
+		Body string `json:"body"`
 	}
 
 	// Authenticate user
 	tokenString, err := auth.GetBearerToken(req.Header)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't get bearer token", err)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't find JSON Web Token", err)
 		return
 	}
-	userIDFromToken, err := auth.ValidateJWT(tokenString, cfg.secret)
+	userID, err := auth.ValidateJWT(tokenString, cfg.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't validate JSON Web Token", err)
 		return
 	}
-	// fmt.Println(userIDFromToken)
-	// fmt.Println(params)
-	// fmt.Println(params.UserID)
-	if userIDFromToken != params.UserID {
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized to post Chirp", err)
+
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+	err = decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters", err)
 		return
 	}
 
@@ -62,7 +54,7 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, req *http.Reque
 
 	chirpParams := database.CreateChirpParams{
 		Body:   msgCleaned,
-		UserID: params.UserID,
+		UserID: userID,
 	}
 
 	chirp, err := cfg.db.CreateChirp(req.Context(), chirpParams)

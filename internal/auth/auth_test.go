@@ -125,30 +125,30 @@ func TestValidateJWT(t *testing.T) {
 func TestGetBearerToken(t *testing.T) {
 	validHeaders := make(http.Header)
 	validHeaders.Set("Authorization", "Bearer VALID_TOKEN")
-	invalidHeaders := make(http.Header)
-	invalidHeaders.Set("Authorization", "BearerVALID_TOKEN")
 
 	tests := []struct {
 		name      string
-		header    http.Header
+		headers   http.Header
 		wantToken string
 		wantErr   bool
 	}{
 		{
-			name:      "Valid headers",
-			header:    validHeaders,
+			name:      "Valid Bearer token",
+			headers:   validHeaders,
 			wantToken: "VALID_TOKEN",
 			wantErr:   false,
 		},
 		{
-			name:      "Invalid headers",
-			header:    invalidHeaders,
+			name: "Malformed Authorization header",
+			headers: http.Header{
+				"Authorization": []string{"BearerINVALID_TOKEN"},
+			},
 			wantToken: "",
 			wantErr:   true,
 		},
 		{
-			name:      "Empty headers",
-			header:    make(http.Header),
+			name:      "Missing Authorization header",
+			headers:   http.Header{},
 			wantToken: "",
 			wantErr:   true,
 		},
@@ -156,16 +156,16 @@ func TestGetBearerToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotToken, err := GetBearerToken(tt.header)
+			gotToken, err := GetBearerToken(tt.headers)
 			// `if (err != nil) == wantError`: This isn't how you
 			// write it, with the `==`, because if you want the error
 			// then that's the expected behavior, nothing to report.
 			// You only report (enter the if) with something unexpected
 			if (err != nil) != tt.wantErr {
-				t.Errorf("tokenString() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetBearerToken() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if gotToken != tt.wantToken {
-				t.Errorf("tokenString() gotToken = %v, want %v", gotToken, tt.wantToken)
+				t.Errorf("GetBearerToken() gotToken = %v, want %v", gotToken, tt.wantToken)
 			}
 		})
 	}

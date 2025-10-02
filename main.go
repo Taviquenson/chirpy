@@ -16,9 +16,9 @@ type apiConfig struct {
 	fileserverHits atomic.Int32 // allows us to safely increment and
 	// read an integer value across multiple
 	// goroutines (HTTP requests)
-	db       *database.Queries
-	platform string
-	secret   string
+	db        *database.Queries
+	platform  string
+	jwtSecret string
 }
 
 func main() {
@@ -40,9 +40,9 @@ func main() {
 		log.Fatal("PLATFORM must be set")
 	}
 
-	secret := os.Getenv("SECRET")
-	if secret == "" {
-		log.Fatal("SECRET must be set")
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("jwtSecret must be set")
 	}
 
 	dbConn, err := sql.Open("postgres", dbURL) // connect to db
@@ -55,7 +55,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
 		platform:       platform,
-		secret:         secret,
+		jwtSecret:      jwtSecret,
 	}
 
 	// An HTTP request multiplexer

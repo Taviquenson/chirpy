@@ -87,19 +87,16 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 }
 
 func GetBearerToken(headers http.Header) (string, error) {
-	if len(headers) == 0 {
-		return "", fmt.Errorf("couldn't get bearer token, headers are empty")
-	}
 	authHeaderString := headers.Get("Authorization") // formatted as: Bearer TOKEN_STRING
 	if authHeaderString == "" {
-		return "", fmt.Errorf("couldn't get Authorization header")
+		return "", fmt.Errorf("no auth header included in request")
 	}
 
-	authHeaderStrings := strings.Fields(authHeaderString)
-	if len(authHeaderStrings) != 2 {
-		return "", fmt.Errorf("the Authorization header is wrongly formatted, expecting 2 substrings but got %d", len(authHeaderStrings))
+	splitAuth := strings.Fields(authHeaderString)
+	if len(splitAuth) < 2 || splitAuth[0] != "Bearer" {
+		return "", fmt.Errorf("malformed authorization header")
 	}
-	tokenString := authHeaderStrings[1]
+	tokenString := splitAuth[1]
 
 	return tokenString, nil
 }
