@@ -6,14 +6,15 @@ import (
 	"time"
 
 	"github.com/Taviquenson/chirpy/internal/auth"
+	"github.com/Taviquenson/chirpy/internal/database"
 )
 
 // Placeholder function signature (probably to be relocated)
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Password         string `json:"password"`
-		Email            string `json:"email"`
-		ExpiresInSeconds int    `json:"expires_in_seconds"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
+		// ExpiresInSeconds int    `json:"expires_in_seconds"`
 	}
 	type response struct {
 		User
@@ -45,13 +46,29 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 
 	// Produce JSON Web Token
 	expirationTime := time.Hour
-	if params.ExpiresInSeconds > 0 && params.ExpiresInSeconds < 3600 { // params.ExpiresInSeconds will be 0 if unspecified
-		expirationTime = time.Duration(params.ExpiresInSeconds) * time.Second
-	}
+	// if params.ExpiresInSeconds > 0 && params.ExpiresInSeconds < 3600 { // params.ExpiresInSeconds will be 0 if unspecified
+	// 	expirationTime = time.Duration(params.ExpiresInSeconds) * time.Second
+	// }
 
 	accessToken, err := auth.MakeJWT(user.ID, cfg.jwtSecret, expirationTime)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create JSON Web Token", err)
+		return
+	}
+
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create refresh token", err)
+		return
+	}
+
+	refreshTokenParams := database.CreateRefreshTokenParams{
+		Token:  refreshToken,
+		UserID: user.ID,
+	}
+	dbRefreshToken, err := cfg.db.CreateRefreshToken(req.Context(), refreshTokenParams)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create database refresh token", err)
 		return
 	}
 
@@ -62,6 +79,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 			UpdatedAt: user.UpdatedAt,
 			Email:     user.Email,
 		},
-		Token: accessToken,
+		Token:        accessToken,
+		RefreshToken: dbRefreshToken.Token,
 	})
 }
