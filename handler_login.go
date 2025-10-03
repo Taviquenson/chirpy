@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/Taviquenson/chirpy/internal/auth"
 	"github.com/Taviquenson/chirpy/internal/database"
@@ -14,7 +13,6 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
 		Password string `json:"password"`
 		Email    string `json:"email"`
-		// ExpiresInSeconds int    `json:"expires_in_seconds"`
 	}
 	type response struct {
 		User
@@ -39,36 +37,27 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 	}
 	// Validate request password with stored database password_hash
 	match, err := auth.CheckPasswordHash(params.Password, user.HashedPassword)
-	if !match || err != nil {
+	if (!match) || (err != nil) {
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
 		return
 	}
 
 	// Produce JSON Web Token
-	expirationTime := time.Hour
-	// if params.ExpiresInSeconds > 0 && params.ExpiresInSeconds < 3600 { // params.ExpiresInSeconds will be 0 if unspecified
-	// 	expirationTime = time.Duration(params.ExpiresInSeconds) * time.Second
-	// }
-
-	accessToken, err := auth.MakeJWT(user.ID, cfg.jwtSecret, expirationTime)
+	accessToken, err := auth.MakeJWT(user.ID, cfg.jwtSecret, auth.TokenAcessExpirationTime)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't create JSON Web Token", err)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create access JSON Web Token", err)
 		return
 	}
 
-	refreshToken, err := auth.MakeRefreshToken()
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't create refresh token", err)
-		return
-	}
+	refreshToken := auth.MakeRefreshToken()
 
 	refreshTokenParams := database.CreateRefreshTokenParams{
 		Token:  refreshToken,
 		UserID: user.ID,
 	}
-	dbRefreshToken, err := cfg.db.CreateRefreshToken(req.Context(), refreshTokenParams)
+	_, err = cfg.db.CreateRefreshToken(req.Context(), refreshTokenParams)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't create database refresh token", err)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't save refresh token", err)
 		return
 	}
 
@@ -80,6 +69,6 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 			Email:     user.Email,
 		},
 		Token:        accessToken,
-		RefreshToken: dbRefreshToken.Token,
+		RefreshToken: refreshToken,
 	})
 }

@@ -25,7 +25,8 @@ type TokenType string
 //     spreading string literals around. (e.g., TokenTypeRefresh TokenType = "chirpy-refresh")
 const (
 	// TokenTypeAccess is the issuer used for access tokens.
-	TokenTypeAccess TokenType = "chirpy-access"
+	TokenTypeAccess          TokenType     = "chirpy-access"
+	TokenAcessExpirationTime time.Duration = time.Hour
 )
 
 func HashPassword(password string) (string, error) {
@@ -103,14 +104,9 @@ func GetBearerToken(headers http.Header) (string, error) {
 	return tokenString, nil
 }
 
-func MakeRefreshToken() (string, error) {
+func MakeRefreshToken() string {
 	// Note that no error handling is necessary, as Read always succeeds.
-	key := make([]byte, 32)
-	_, err := rand.Read(key)
-	if err != nil {
-		return "", err
-	}
-	// The key can contain any byte value, print the key in hex.
-	encodedStr := hex.EncodeToString(key)
-	return encodedStr, nil
+	token := make([]byte, 32)
+	rand.Read(token)
+	return hex.EncodeToString(token)
 }
