@@ -29,7 +29,7 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, req *http.Reque
 	// Authenticate user
 	tokenString, err := auth.GetBearerToken(req.Header)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't find JSON Web Token", err)
+		respondWithError(w, http.StatusUnauthorized, "Couldn't find JSON Web Token", err)
 		return
 	}
 	userID, err := auth.ValidateJWT(tokenString, cfg.jwtSecret)
