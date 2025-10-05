@@ -35,7 +35,7 @@ func (cfg *apiConfig) handlerChirpsDelete(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// Authorize user
+	// Authorize user by verifying they are the author of the chirp
 	if dbChirp.UserID != userID {
 		respondWithError(w, http.StatusForbidden, "Unauthorized user", err)
 		return
