@@ -2,11 +2,14 @@ package main
 
 import (
 	"net/http"
+	"sort"
 
 	"github.com/google/uuid"
 )
 
 func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, req *http.Request) {
+	// Check if a sorting order was included in the request
+	sortOrder := req.URL.Query().Get("sort")
 	// Check if a user_id/author_id was included in the request to decide whether to return
 	// all chirps or just those authored by the provided user
 	s := req.URL.Query().Get("author_id")
@@ -36,7 +39,9 @@ func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, req *http.Req
 			}
 			chirpsForJSON = append(chirpsForJSON, chirp)
 		}
-
+		if sortOrder == "desc" {
+			sort.Slice(chirpsForJSON, func(i, j int) bool { return chirpsForJSON[i].CreatedAt.After(chirpsForJSON[j].CreatedAt) })
+		}
 		respondWithJSON(w, http.StatusOK, chirpsForJSON)
 		return
 	}
@@ -59,7 +64,9 @@ func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, req *http.Req
 		}
 		chirpsForJSON = append(chirpsForJSON, chirp)
 	}
-
+	if sortOrder == "desc" {
+		sort.Slice(chirpsForJSON, func(i, j int) bool { return chirpsForJSON[i].CreatedAt.After(chirpsForJSON[j].CreatedAt) })
+	}
 	respondWithJSON(w, http.StatusOK, chirpsForJSON)
 }
 
